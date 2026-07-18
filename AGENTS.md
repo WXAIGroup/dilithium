@@ -15,6 +15,14 @@ dilithium/
 │   └── nistkat/   # NIST KAT test vectors
 ├── avx2/          # AVX2-optimized x86 implementation (symlinks most files to ref/)
 │   └── test/
+├── dilithium_hw/  # SystemVerilog hardware IP core (Phased implementation)
+│   ├── IMPLEMENTATION_PLAN.md  # Full 7-phase plan
+│   ├── DESIGN.md               # Phase 1 design doc
+│   ├── SIMULATION.md           # Phase 1 simulation guide
+│   ├── VERIFICATION_REPORT.md  # Phase 1 verification report
+│   ├── include/                # SV packages and constants
+│   ├── rtl/                    # SV modules
+│   └── scripts/                # Build & verification scripts
 ├── *.yml          # META configs for each parameter set
 └── *.sh           # Test scripts
 ```
@@ -27,6 +35,9 @@ dilithium/
 | SHA3/FIPS202 | `ref/fips202.c` | Keccak-p1600 permutation |
 | API definitions | `ref/api.h`, `avx2/api.h` | Key/signature sizes by parameter set |
 | Build configs | `ref/Makefile`, `avx2/Makefile` | Mode flags: `-DDILITHIUM_MODE=2\|3\|5` |
+| HW design (Phase 1) | `dilithium_hw/DESIGN.md` | Keccak + NTT architecture |
+| HW verification | `dilithium_hw/VERIFICATION_REPORT.md` | Verification results |
+| HW simulation | `dilithium_hw/SIMULATION.md` | How to run RTL sim |
 
 ## BUILD & TEST
 ```bash
@@ -74,9 +85,22 @@ make -C ref clean && make -C ref
 # Speed benchmarking (AVX2 only)
 make -C avx2 speed
 ./avx2/test/test_speed2
+
+# Verify hardware IP constants match C reference
+python3 dilithium_hw/scripts/verify_constants.py
+
+# Generate NTT zetas include file (only if ref/ntt.c changes)
+python3 dilithium_hw/scripts/gen_twiddles.py
+
+# Generate golden output vectors from C reference for SV simulation
+cc -O2 -Iref -DDILITHIUM_MODE=2 -o /tmp/gen_golden \
+    dilithium_hw/scripts/gen_golden.c \
+    ref/fips202.c ref/ntt.c ref/reduce.c
+/tmp/gen_golden > dilithium_hw/scripts/golden_output.txt
 ```
 
 ## NOTES
 - `avx2/` symlinks: `fips202.c`, `packing.c`, `packing.h`, `params.h`, `randombytes.c`, `randombytes.h`, `sign.h`, `symmetric-shake.c`
 - Compiler flags in `ref/Makefile`: `-Wall -Wextra -Wpedantic -Wmissing-prototypes -Wshadow -Wvla -Wpointer-arith -O3 -fomit-frame-pointer`
 - Travis CI tests on: gcc/clang, amd64/arm64/ppc64le/s390x
+- `dilithium_hw/` Phase 1 verified via static constant checks + C reference execution; RTL simulation deferred to Phase 8 (requires Verilator/iverilog)
